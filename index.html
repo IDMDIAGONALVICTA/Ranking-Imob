@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Victa/Diagonal · Auto (Híbrido: Público + Logado)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+  <style>
+    :root{--g900:#00512A;--g700:#007C27;--g400:#6ECC01;--g50:#F0F5CD;--shadow:0 8px 20px rgba(0,0,0,.06);--radius:16px}
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#fff,#f6faf4);font-family:Inter,system-ui,Segoe UI,Roboto,Arial;color:#1f2937}
+    .wrap{max-width:1200px;margin:32px auto;padding:0 16px;}
+    header.top{background:var(--g900);color:#fff;padding:20px 16px;border-radius:var(--radius);box-shadow:var(--shadow)}
+    .brand{font-weight:800}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+    .pill{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.2);font-size:12px}
+    button{border:1px solid #e5e7eb;background:#fff;color:#1f2937;padding:10px 12px;border-radius:10px;box-shadow:var(--shadow);font-weight:700;cursor:pointer}
+    button.primary{background:linear-gradient(135deg,var(--g700),var(--g400));border:none;color:#fff}
+    input[type="number"]{width:64px;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;box-shadow:var(--shadow)}
+    .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:20px}
+    @media(min-width:900px){.grid{grid-template-columns:1fr 1fr}}
+    section.card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-height:260px}
+    section.card>header{background:linear-gradient(135deg,var(--g900),var(--g700));color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    section.card h3{margin:0;font-size:16px}
+    .body{padding:12px;overflow:auto}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:600px}
+    thead th{position:sticky;top:0;background:#f8fafb;padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
+    tbody td{padding:10px;border-bottom:1px solid #f1f5f9}
+    tbody tr:hover{background:#f9fafb}
+    .muted{color:#6b7280;font-size:13px}
+    .err{background:#fff7ed;border:1px solid #fdba74;color:#7c2d12;border-radius:12px;padding:10px}
+    .small{font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="row">
+        <span class="brand">Victa/Diagonal · Auto (Híbrido)</span>
+        <span class="pill">Status: <strong id="status">Inicializando…</strong></span>
+        <span class="pill">Auto ligado</span>
+        <label class="pill" style="gap:6px">Intervalo (min): <input id="mins" type="number" min="1" max="120" value="5"/></label>
+      </div>
+      <div class="row">
+        <button id="refresh" class="primary">🔄 Atualizar agora</button>
+        <button id="download">⬇️ Baixar esta página (HTML)</button>
+        <span class="muted">Última verificação: <span id="lastCheck">—</span></span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <header><h3>Ranking Viabilizador</h3><span class="muted">Sincronizado: <span id="last-a">—</span></span></header>
+        <div class="body"><div id="table-a">Carregando…</div></div>
+      </section>
+      <section class="card">
+        <header><h3>Ranking Imobiliária</h3><span class="muted">Sincronizado: <span id="last-b">—</span></span></header>
+        <div class="body"><div id="table-b">Carregando…</div></div>
+      </section>
+    </div>
+
+    <p class="muted small" style="margin-top:14px">
+      Ordem de tentativa: (1) público anônimo → (2) público gviz → (3) autenticado anônimo → (4) autenticado gviz.<br/>
+      Se você estiver <em>logado no Google</em> e a planilha estiver “Qualquer pessoa com o link (Leitor)” ou restrita à sua conta, a etapa (3/4) deve funcionar.
+    </p>
+  </div>
+
+<script>
+const SOURCES = [
+  { id:"a", urls:[
+    "https://docs.google.com/spreadsheets/d/1XKYxT7rL1mdYUdx8LlWnaUO2HD0UOJ-0D7UWqXVZwo0/export?format=csv&gid=0", "https://docs.google.com/spreadsheets/d/1XKYxT7rL1mdYUdx8LlWnaUO2HD0UOJ-0D7UWqXVZwo0/gviz/tq?tqx=out:csv&gid=0",
+    "https://docs.google.com/spreadsheets/d/1XKYxT7rL1mdYUdx8LlWnaUO2HD0UOJ-0D7UWqXVZwo0/export?format=csv&gid=0", "https://docs.google.com/spreadsheets/d/1XKYxT7rL1mdYUdx8LlWnaUO2HD0UOJ-0D7UWqXVZwo0/gviz/tq?tqx=out:csv&gid=0"
+  ]},
+  { id:"b", urls:[
+    "https://docs.google.com/spreadsheets/d/1TVmuLNPOEmVt57O6F1NF3Fc0hi_Y9f8Zm2Qzg51EJrE/export?format=csv&gid=0", "https://docs.google.com/spreadsheets/d/1TVmuLNPOEmVt57O6F1NF3Fc0hi_Y9f8Zm2Qzg51EJrE/gviz/tq?tqx=out:csv&gid=0",
+    "https://docs.google.com/spreadsheets/d/1TVmuLNPOEmVt57O6F1NF3Fc0hi_Y9f8Zm2Qzg51EJrE/export?format=csv&gid=0", "https://docs.google.com/spreadsheets/d/1TVmuLNPOEmVt57O6F1NF3Fc0hi_Y9f8Zm2Qzg51EJrE/gviz/tq?tqx=out:csv&gid=0"
+  ]},
+];
+
+const $ = (s)=>document.querySelector(s);
+function esc(s){return (s==null?"":String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"))}
+
+async function fetchVariant(url, withCreds){
+  try{
+    const res = await fetch(url + (url.includes("?")?"&":"?") + "cachebust=" + Date.now(), {
+      credentials: withCreds ? "include" : "omit"
+    });
+    if(!res.ok) throw new Error("HTTP "+res.status+" "+res.statusText);
+    const text = await res.text();
+    if(!text || text.trim()==="") throw new Error("Resposta vazia");
+    return { ok:true, text };
+  }catch(e){
+    return { ok:false, error: e.message || String(e) };
+  }
+}
+
+function renderError(container, urlTried, message){
+  container.innerHTML = `<div class="err"><strong>Não consegui ler a fonte.</strong><br>
+    <div style="margin-top:6px">URL: <code class="small">${esc(urlTried)}</code></div>
+    <div style="margin-top:6px">Motivo: ${esc(message)}</div>
+    <div style="margin-top:6px" class="muted">Se você estiver logado no Google, tente recarregar. Caso continue, publique a aba (Arquivo → Publicar na Web) para um link totalmente público.</div>
+  </div>`;
+}
+
+function csvToTable(container, csvText){
+  const parsed = Papa.parse(csvText, { dynamicTyping:false, skipEmptyLines:true });
+  const data = parsed.data || [];
+  if(!data.length) { container.innerHTML = "<p>Sem dados.</p>"; return; }
+  const head = data[0]; const rows = data.slice(1);
+  const thead = "<thead><tr>" + head.map(h=>`<th>${esc(h)}</th>`).join("") + "</tr></thead>";
+  const tbody = "<tbody>" + rows.map(r=>"<tr>"+ r.map(c => `<td>${esc(c)}` ).join("") +"</td></tr>").join("") + "</tbody>";
+  container.innerHTML = `<table>${thead}{tbody}</table>`;
+}
+
+async function loadSource(cardId, urls){
+  const variants = [
+    { creds:false, idx:0 }, // export anon
+    { creds:false, idx:1 }, // gviz anon
+    { creds:true, idx:2 },  // export with cookies
+    { creds:true, idx:3 }   // gviz with cookies
+  ];
+  const container = $("#table-"+cardId);
+  for(const v of variants){
+    const u = urls[v.idx];
+    const r = await fetchVariant(u, v.creds);
+    if(r.ok){
+      csvToTable(container, r.text);
+      $("#last-"+cardId).textContent = dayjs().format("DD/MM/YYYY HH:mm:ss");
+      return true;
+    }
+    // else try next
+  }
+  renderError(container, urls[0], "Falhei em todas as tentativas (anônimo e autenticado).");
+  return false;
+}
+
+async function refreshAll(){
+  $("#status").textContent = "Atualizando…";
+  $("#lastCheck").textContent = dayjs().format("DD/MM/YYYY HH:mm:ss");
+  let okAll = true;
+  for(const src of SOURCES){
+    const ok = await loadSource(src.id, src.urls);
+    okAll = okAll && ok;
+  }
+  $("#status").textContent = okAll ? "Atualizado" : "Atualizado (com avisos)";
+}
+
+function startAuto(){
+  const mins = Math.max(1, parseInt($("#mins").value||"5",10));
+  return setInterval(refreshAll, mins*60*1000);
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  $("#refresh").addEventListener("click", refreshAll);
+  $("#download").addEventListener("click", ()=>{
+    const blob = new Blob([document.documentElement.outerHTML], {type:"text/html;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "DASHBOARD_AUTO_HIBRIDO.html";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  $("#mins").addEventListener("change", ()=>{ clearInterval(window.__timer); window.__timer = startAuto(); });
+
+  refreshAll();
+  window.__timer = startAuto();
+});
+</script>
+</body>
+</html>
